@@ -2,10 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import ClientTime from './ClientTime';
 
-const API_BASE = process.env.BASE_URL;
-const API_ENDPOINT = `${API_BASE ? API_BASE : ''}/api/message`;
-const API_BY_ADLINK = `${API_BASE ? API_BASE : ''}/api/message/by-adlink`;
-const API_BY_PRIOR = `${API_BASE ? API_BASE : ''}/api/message/by-prior-message`;
+const API_ENDPOINT = `/api/message`;
+const API_BY_ADLINK = `api/message/by-adlink`;
+const API_BY_PRIOR = `/api/message/by-prior-message`;
 
 const TABS = [
   { key: 'all', label: 'All Messages' },
