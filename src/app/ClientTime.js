@@ -1,10 +1,17 @@
 'use client'
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function ClientTime({ date }) {
-  if (typeof window === 'undefined') {
-    // Don't render anything on the server to avoid hydration mismatch
-    return null;
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated) {
+    // Render a placeholder or nothing on the server
+    return <span className="text-gray-400">--:--:--</span>;
   }
+
   return <>{new Date(date).toLocaleTimeString()}</>;
 } 

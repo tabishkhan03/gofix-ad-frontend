@@ -4,6 +4,14 @@ import ClientTime from './ClientTime';
 
 const API_BASE = process.env.BASE_URL;
 const API_ENDPOINT = `${API_BASE ? API_BASE : ''}/api/message`;
+const API_BY_ADLINK = `${API_BASE ? API_BASE : ''}/api/message/by-adlink`;
+const API_BY_PRIOR = `${API_BASE ? API_BASE : ''}/api/message/by-prior-message`;
+
+const TABS = [
+  { key: 'all', label: 'All Messages' },
+  { key: 'adlink', label: 'By Ad Link' },
+  { key: 'prior', label: 'By Prior Message' },
+];
 
 function formatDate(dateString) {
   const date = new Date(dateString);
@@ -89,6 +97,43 @@ function MessageCard({ message }) {
   );
 }
 
+function GroupCard({ group, type }) {
+  return (
+    <div className="bg-white/90 backdrop-blur rounded-2xl shadow-lg p-7 h-full border border-indigo-100 flex flex-col">
+      <div className="mb-3">
+        <div className="font-semibold text-indigo-700 text-lg">
+          {type === 'adlink' ? (
+            <>
+              Ad Link: <a href={group._id} className="text-indigo-500 underline break-all" target="_blank" rel="noopener noreferrer">{group._id}</a>
+            </>
+          ) : (
+            <>
+              Prior Message: <span className="text-indigo-500">{group._id}</span>
+            </>
+          )}
+        </div>
+        <div className="text-gray-500 text-sm">Count: {group.count}</div>
+      </div>
+      <div className="flex-1">
+        <ul className="space-y-2">
+          {group.users.map((user) => (
+            <li key={user._id} className="text-gray-700 text-base">
+              <span className="font-medium">{user.senderUsername}</span>
+              {user.senderHandle && <span className="text-gray-400 ml-1">(@{user.senderHandle})</span>}
+              <span className="ml-2 text-gray-500">→ {user.recipientUsername}</span>
+              {user.adLink && (
+                <span className="ml-2 text-indigo-400 underline">
+                  <a href={user.adLink} target="_blank" rel="noopener noreferrer">Ad</a>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function MessagePage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +145,13 @@ export default function MessagePage() {
     activeUsers: 0,
     newMessages: 0
   });
+  const [tab, setTab] = useState('all');
+  const [adGroups, setAdGroups] = useState([]);
+  const [priorGroups, setPriorGroups] = useState([]);
+  const [search, setSearch] = useState('');
+  const [adSearch, setAdSearch] = useState('');
 
+  // Fetch all messages
   const fetchMessages = async () => {
     setLoading(true);
     setError(null);
@@ -110,8 +161,6 @@ export default function MessagePage() {
       const data = await res.json();
       setMessages(data);
       setLastUpdate(new Date());
-      
-      // Update stats
       setStats(prev => ({
         ...prev,
         totalMessages: data.length,
@@ -127,29 +176,74 @@ export default function MessagePage() {
     }
   };
 
+  // Fetch ad link groups
+  const fetchAdGroups = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(API_BY_ADLINK);
+      if (!res.ok) throw new Error('Failed to fetch ad link groups');
+      const data = await res.json();
+      setAdGroups(data);
+      setLastUpdate(new Date());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch prior message groups
+  const fetchPriorGroups = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(API_BY_PRIOR);
+      if (!res.ok) throw new Error('Failed to fetch prior message groups');
+      const data = await res.json();
+      setPriorGroups(data);
+      setLastUpdate(new Date());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Initial fetch
-    fetchMessages();
+    if (tab === 'all') fetchMessages();
+    if (tab === 'adlink') fetchAdGroups();
+    if (tab === 'prior') fetchPriorGroups();
+    // eslint-disable-next-line
+  }, [tab]);
 
-    // Set up the interval
-    const interval = setInterval(fetchMessages, 30000);
-
-    // Countdown timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (tab === 'all') fetchMessages();
+      if (tab === 'adlink') fetchAdGroups();
+      if (tab === 'prior') fetchPriorGroups();
+    }, 30000);
     const timer = setInterval(() => {
-      setNextUpdate(prev => {
-        if (prev <= 1) {
-          return 30;
-        }
-        return prev - 1;
-      });
+      setNextUpdate(prev => (prev <= 1 ? 30 : prev - 1));
     }, 1000);
-
-    // Cleanup
     return () => {
       clearInterval(interval);
       clearInterval(timer);
     };
-  }, []);
+    // eslint-disable-next-line
+  }, [tab]);
+
+  // Filtered data
+  const filteredMessages = messages.filter(msg =>
+    (!search || msg.content.toLowerCase().includes(search.toLowerCase())) &&
+    (!adSearch || (msg.adData && msg.adData.adLink && msg.adData.adLink.toLowerCase().includes(adSearch.toLowerCase())))
+  );
+  const filteredAdGroups = adGroups.filter(group =>
+    !adSearch || (group._id && group._id.toLowerCase().includes(adSearch.toLowerCase()))
+  );
+  const filteredPriorGroups = priorGroups.filter(group =>
+    !search || (group._id && group._id.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-100 to-violet-100 py-8 px-2">
@@ -193,40 +287,56 @@ export default function MessagePage() {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-12">
-          <StatCard 
-            title="Total Messages" 
-            value={stats.totalMessages}
-            icon={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-            }
-          />
-          <StatCard 
-            title="Active Users" 
-            value={stats.activeUsers}
-            icon={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-            }
-          />
-          <StatCard 
-            title="New Messages (24h)" 
-            value={stats.newMessages}
-            icon={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            }
-          />
+        {/* Tabs */}
+        <div className="mb-6 flex gap-2 border-b border-indigo-200">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              className={`px-4 py-2 font-semibold rounded-t-lg focus:outline-none transition-colors duration-200 ${tab === t.key ? 'bg-white text-indigo-700 shadow border-x border-t border-indigo-200 -mb-px' : 'text-gray-500 hover:text-indigo-600'}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+        {/* Stats */}
+        {tab === 'all' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-12">
+            <StatCard 
+              title="Total Messages" 
+              value={stats.totalMessages}
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              }
+            />
+            <StatCard 
+              title="Active Users" 
+              value={stats.activeUsers}
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              }
+            />
+            <StatCard 
+              title="New Messages (24h)" 
+              value={stats.newMessages}
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              }
+            />
+          </div>
+        )}
+        {/* Content */}
         {loading && (
           <div className="text-center text-gray-500 text-lg py-8 bg-white/80 rounded-xl backdrop-blur">
-            Loading messages...
+            Loading...
           </div>
         )}
         {error && (
@@ -234,17 +344,45 @@ export default function MessagePage() {
             {error}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-          {messages && messages.length > 0 ? (
-            messages.map((msg, idx) => (
-              <MessageCard key={msg._id || idx} message={msg} />
-            ))
-          ) : !loading && !error ? (
-            <div className="text-center text-gray-500 text-base py-8 bg-white/80 rounded-xl backdrop-blur col-span-full">
-              No messages found.
-            </div>
-          ) : null}
-        </div>
+        {tab === 'all' && !loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+            {filteredMessages.length > 0 ? (
+              filteredMessages.map((msg, idx) => (
+                <MessageCard key={msg._id || idx} message={msg} />
+              ))
+            ) : (
+              <div className="text-center text-gray-500 text-base py-8 bg-white/80 rounded-xl backdrop-blur col-span-full">
+                No messages found.
+              </div>
+            )}
+          </div>
+        )}
+        {tab === 'adlink' && !loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+            {filteredAdGroups.length > 0 ? (
+              filteredAdGroups.map((group, idx) => (
+                <GroupCard key={group._id || idx} group={group} type="adlink" />
+              ))
+            ) : (
+              <div className="text-center text-gray-500 text-base py-8 bg-white/80 rounded-xl backdrop-blur col-span-full">
+                No ad link groups found.
+              </div>
+            )}
+          </div>
+        )}
+        {tab === 'prior' && !loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+            {filteredPriorGroups.length > 0 ? (
+              filteredPriorGroups.map((group, idx) => (
+                <GroupCard key={group._id || idx} group={group} type="prior" />
+              ))
+            ) : (
+              <div className="text-center text-gray-500 text-base py-8 bg-white/80 rounded-xl backdrop-blur col-span-full">
+                No prior message groups found.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );
