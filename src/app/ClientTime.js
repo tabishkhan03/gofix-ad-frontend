@@ -1,17 +1,23 @@
-'use client'
-import React, { useEffect, useState } from 'react';
+"use client"
+import { useEffect, useState } from "react"
 
 export default function ClientTime({ date }) {
-  const [hydrated, setHydrated] = useState(false);
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setHydrated(true);
-  }, []);
+    setMounted(true)
+  }, [])
 
-  if (!hydrated) {
-    // Render a placeholder or nothing on the server
-    return <span className="text-gray-400">--:--:--</span>;
+  if (!mounted) {
+    return <span className="text-gray-500">--:--</span>
   }
 
-  return <>{new Date(date).toLocaleTimeString()}</>;
-} 
+  return (
+    <span className="text-gray-600">
+      {date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </span>
+  )
+}
