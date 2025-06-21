@@ -859,7 +859,7 @@ export default function MessageDashboard() {
             <div className="mb-6">
               <h3 className="text-xl font-semibold text-gray-900">Update Session Token</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Enter the session token below. This will create a new session if one doesn't exist, or update the
+                Enter the session token below. This will create a new session if one doesn&apos;t exist, or update the
                 existing one.
               </p>
             </div>
